@@ -9,7 +9,7 @@ const { userUpdateSchema, userPatchSchema } = require('../utils/validators/userV
 router.get('/', authenticate, authorize('admin', 'instructor'), logger, UserController.getAll);
 router.get('/:id', authenticate, logger, UserController.getById);
 router.put('/:id', authenticate, authorize('admin'), validate(userUpdateSchema), logger, UserController.update);
-router.patch('/:id', authenticate, validate(userPatchSchema), logger, UserController.patch);
+router.patch('/:id', authenticate, authorize('admin'), validate(userPatchSchema), logger, UserController.patch);
 router.delete('/:id', authenticate, authorize('admin'), logger, UserController.remove);
 
 module.exports = router;

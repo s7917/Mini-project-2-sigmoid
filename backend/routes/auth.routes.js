@@ -9,7 +9,9 @@ router.get('/github', AuthController.githubAuth);
 router.get('/github/callback', AuthController.githubCallback);
 router.post('/login', validate(localLoginSchema), AuthController.localLogin);
 router.post('/signup', validate(localSignupSchema), AuthController.localSignup);
-router.get('/demo-users', AuthController.demoUsers);
+if (process.env.NODE_ENV !== 'production') {
+  router.get('/demo-users', AuthController.demoUsers);
+}
 router.get('/me', authenticate, logger, AuthController.getMe);
 router.post('/logout', authenticate, logger, AuthController.logout);
 

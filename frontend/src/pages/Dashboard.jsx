@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { usePageTitle } from '../hooks/usePageTitle';
 import { getAllEnrollments } from '../services/enrollmentService';
 import { getAllProgress } from '../services/progressService';
 import { getAllPerformance } from '../services/performanceService';
@@ -160,6 +161,7 @@ function buildDashboardModel(user, courses, enrollments, progress, performance) 
 
 export default function Dashboard() {
   const { user } = useAuth();
+  usePageTitle('Dashboard');
   const [dashboard, setDashboard] = useState({ spotlight: null, actions: [], stats: [], signals: [] });
   const [loading, setLoading] = useState(true);
 

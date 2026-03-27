@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
+import { usePageTitle } from '../hooks/usePageTitle';
 import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Icon from '../components/Icon';
@@ -7,19 +9,18 @@ import { getApprovals } from '../services/approvalService';
 
 export default function InstructorPanel() {
   const { user } = useAuth();
+  const { showToast } = useToast();
+  usePageTitle('Instructor Panel');
+
   const [courses, setCourses] = useState([]);
   const [approvals, setApprovals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState('');
-  const [msgTone, setMsgTone] = useState('success');
   const [editModal, setEditModal] = useState(null);
   const [moduleModal, setModuleModal] = useState(null);
   const [lessonModal, setLessonModal] = useState(null);
 
   const flashMessage = (text, tone = 'success') => {
-    setMsgTone(tone);
-    setMsg(text);
-    setTimeout(() => setMsg(''), 3000);
+    showToast(text, tone);
   };
 
   const fetchCourses = async () => {
@@ -45,7 +46,10 @@ export default function InstructorPanel() {
         .filter((request) => request.request_type !== 'instructor_signup')
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       setApprovals(approvalData);
-    } catch {} finally { setLoading(false); }
+    } catch {
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -65,7 +69,9 @@ export default function InstructorPanel() {
       flashMessage(res.data.message || 'Course request submitted');
       setEditModal(null);
       fetchCourses();
-    } catch (err) { flashMessage(err.response?.data?.message || 'Save failed', 'error'); }
+    } catch (err) {
+      flashMessage(err.response?.data?.message || 'Save failed', 'error');
+    }
   };
 
   const handleSaveModule = async (event) => {
@@ -81,7 +87,9 @@ export default function InstructorPanel() {
       flashMessage(res.data.message || 'Module request submitted');
       setModuleModal(null);
       fetchCourses();
-    } catch (err) { flashMessage(err.response?.data?.message || 'Save failed', 'error'); }
+    } catch (err) {
+      flashMessage(err.response?.data?.message || 'Save failed', 'error');
+    }
   };
 
   const handleSaveLesson = async (event) => {
@@ -96,7 +104,9 @@ export default function InstructorPanel() {
       flashMessage(res.data.message || 'Lesson request submitted');
       setLessonModal(null);
       fetchCourses();
-    } catch (err) { flashMessage(err.response?.data?.message || 'Save failed', 'error'); }
+    } catch (err) {
+      flashMessage(err.response?.data?.message || 'Save failed', 'error');
+    }
   };
 
   const handleDelete = async (type, id) => {
@@ -105,7 +115,9 @@ export default function InstructorPanel() {
       const res = await api.delete(`/${type}/${id}`);
       flashMessage(res.data.message || 'Delete request submitted');
       fetchCourses();
-    } catch (err) { flashMessage(err.response?.data?.message || 'Delete failed', 'error'); }
+    } catch (err) {
+      flashMessage(err.response?.data?.message || 'Delete failed', 'error');
+    }
   };
 
   if (loading) return <LoadingSpinner />;
@@ -127,15 +139,9 @@ export default function InstructorPanel() {
   };
 
   const getApprovalSummary = (request) => {
-    if (request.request_type === 'course') {
-      return request.payload?.title || 'Course request submitted';
-    }
-    if (request.request_type === 'module') {
-      return request.payload?.module_name || 'Module request submitted';
-    }
-    if (request.request_type === 'lesson') {
-      return request.payload?.lesson_name || 'Lesson request submitted';
-    }
+    if (request.request_type === 'course') return request.payload?.title || 'Course request submitted';
+    if (request.request_type === 'module') return request.payload?.module_name || 'Module request submitted';
+    if (request.request_type === 'lesson') return request.payload?.lesson_name || 'Lesson request submitted';
     return 'Content request submitted';
   };
 
@@ -151,7 +157,6 @@ export default function InstructorPanel() {
         <h1 className="page-title">Instructor <span className="text-gradient">Panel</span></h1>
         <p className="page-subtitle">Draft course content, submit changes for admin approval, and manage approved teaching material.</p>
       </div>
-      {msg && <div className={`toast ${msgTone === 'error' ? 'toast-error' : 'toast-success'}`}>{msg}</div>}
       <button className="btn btn-primary" onClick={() => setEditModal({})}>New Course Request</button>
 
       <section className="approval-list instructor-approval-list">

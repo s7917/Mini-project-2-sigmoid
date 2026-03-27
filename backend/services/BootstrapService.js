@@ -19,8 +19,6 @@ class BootstrapService {
   }
 
   static async ensureDemoAccounts() {
-    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-
     for (const account of DEMO_ACCOUNTS) {
       let user = await UserRepository.findByEmail(account.email);
       if (!user) {
@@ -33,6 +31,7 @@ class BootstrapService {
 
       const credential = await LocalCredential.findOne({ email: account.email });
       if (!credential) {
+        const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
         await LocalCredential.create({
           user_id: user.id,
           name: account.name,
@@ -48,7 +47,6 @@ class BootstrapService {
         credential.status = 'active';
         credential.requested_role = account.role;
         credential.demo_account = true;
-        credential.password_hash = passwordHash;
         await credential.save();
       }
     }

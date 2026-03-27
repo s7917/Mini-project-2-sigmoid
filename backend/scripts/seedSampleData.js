@@ -1,12 +1,15 @@
 require('dotenv').config();
 
+const bcrypt = require('bcryptjs');
 const pool = require('../config/db.mysql');
 const mongoose = require('../config/db.mongo');
 const ActivityLog = require('../models/mongo/ActivityLog');
 const AuthLog = require('../models/mongo/AuthLog');
 const LearningEvent = require('../models/mongo/LearningEvent');
+const LocalCredential = require('../models/mongo/LocalCredential');
 
 const SEED_DOMAIN = 'seed.eduverse.dev';
+const SEED_PASSWORD = 'SeedPass123!';
 const COURSE_BLUEPRINTS = [
   ['Java Platform Foundations', 'Build reliable Java services with strong language fundamentals, testing habits, and deployment-ready workflows.'],
   ['Spring Boot API Delivery', 'Design, document, and ship maintainable APIs with layered architecture and real-world operational guardrails.'],
@@ -271,6 +274,7 @@ async function cleanupExistingSeedData(connection) {
   await Promise.all([
     ActivityLog.deleteMany({ user_id: { $in: seedUserIds } }),
     AuthLog.deleteMany({ user_id: { $in: seedUserIds } }),
+    LocalCredential.deleteMany({ email: { $regex: `@${SEED_DOMAIN}$`, $options: 'i' } }),
     LearningEvent.deleteMany({
       $or: [
         { user_id: { $in: seedUserIds } },
@@ -478,6 +482,23 @@ async function seedMongoCollections({ users, courses, lessons, enrollments }) {
   };
 }
 
+async function seedLocalCredentials(users) {
+  const allUsers = users.admins.concat(users.instructors, users.learners);
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
+  const credentials = allUsers.map((user) => ({
+    user_id: user.id,
+    name: user.name,
+    email: user.email,
+    password_hash: passwordHash,
+    status: 'active',
+    requested_role: user.role,
+    demo_account: false
+  }));
+
+  await LocalCredential.insertMany(credentials, { ordered: false });
+  return credentials.length;
+}
+
 async function main() {
   const connection = await pool.getConnection();
 
@@ -527,6 +548,7 @@ async function main() {
       lessons,
       enrollments: enrollmentPlans
     });
+    const localCredentialCount = await seedLocalCredentials({ admins, instructors, learners });
 
     const completedCount = enrollmentPlans.filter((item) => item.status === 'completed').length;
     const avgCompletion = average(enrollmentPlans, 'completion').toFixed(1);
@@ -534,7 +556,11 @@ async function main() {
     console.log('Sample data seeded successfully.');
     console.log(`MySQL: ${admins.length + instructors.length + learners.length} users, ${courses.length} courses, ${modules.length} modules, ${lessons.length} lessons.`);
     console.log(`MySQL: ${enrollmentPlans.length} enrollments, ${enrollmentPlans.length} progress records, ${completedCount} performance-ready completions.`);
-    console.log(`MongoDB: ${mongoCounts.authLogs} auth logs, ${mongoCounts.activityLogs} activity logs, ${mongoCounts.learningEvents} learning events.`);
+    console.log(`MongoDB: ${localCredentialCount} local credentials, ${mongoCounts.authLogs} auth logs, ${mongoCounts.activityLogs} activity logs, ${mongoCounts.learningEvents} learning events.`);
+    console.log(`Seed login password for all seeded users: ${SEED_PASSWORD}`);
+    console.log(`Example admin login: ${admins[0]?.email}`);
+    console.log(`Example instructor login: ${instructors[0]?.email}`);
+    console.log(`Example learner login: ${learners[0]?.email}`);
     console.log(`Average seeded progress: ${avgCompletion}%`);
   } catch (error) {
     try {

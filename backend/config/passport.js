@@ -10,7 +10,10 @@ passport.use(new GitHubStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      const email = profile.emails && profile.emails[0] ? profile.emails[0].value : `${profile.username}@github.com`;
+      if (!profile.emails || !profile.emails[0] || !profile.emails[0].value) {
+        return done(new Error('GitHub account does not have a public email. Please add one and try again.'), null);
+      }
+      const email = profile.emails[0].value;
       const name = profile.displayName || profile.username;
       const avatar_url = profile.photos && profile.photos[0] ? profile.photos[0].value : null;
       const github_id = String(profile.id);

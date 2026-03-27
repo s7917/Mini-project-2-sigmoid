@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
+import { usePageTitle } from '../hooks/usePageTitle';
 import { getDemoUsers, loginWithEmail, loginWithGithub, signupWithEmail } from '../services/authService';
 import Icon from '../components/Icon';
 
@@ -8,18 +10,56 @@ const INITIAL_FORM = {
   name: '',
   email: '',
   password: '',
+  confirmPassword: '',
   role: 'learner'
 };
+
+function getPasswordStrength(password) {
+  const hasMixedCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+  if (!password.length) return { level: 0, label: 'Weak' };
+  if (password.length >= 12 && hasMixedCase && hasNumber && hasSpecial) return { level: 4, label: 'Strong' };
+  if (password.length >= 10 && hasMixedCase) return { level: 3, label: 'Good' };
+  if (password.length >= 6) return { level: 2, label: 'Fair' };
+  return { level: 1, label: 'Weak' };
+}
+
+function EyeIcon({ visible }) {
+  if (visible) {
+    return (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.11 1 12c.77-1.82 2-3.42 3.46-4.67" />
+        <path d="M10.58 10.58A2 2 0 1 0 13.42 13.42" />
+        <path d="M1 1l22 22" />
+        <path d="M9.88 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.89 11 8a11.22 11.22 0 0 1-1.64 2.72" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { showToast } = useToast();
+  usePageTitle('Sign In');
+
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [messageTone, setMessageTone] = useState('success');
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [demoUsers, setDemoUsers] = useState([]);
+
+  const passwordStrength = useMemo(() => getPasswordStrength(form.password), [form.password]);
 
   useEffect(() => {
     getDemoUsers()
@@ -37,7 +77,7 @@ export default function Login() {
     }
 
     if (!err.response) {
-      return 'Cannot reach the backend. Make sure the backend is running on http://localhost:5000 and try again.';
+      return 'Cannot reach the backend. Make sure the backend is running on http://localhost:3000 and try again.';
     }
 
     return err.response?.data?.message || 'Authentication failed';
@@ -45,8 +85,13 @@ export default function Login() {
 
   const handleLocalSubmit = async (event) => {
     event.preventDefault();
+
+    if (mode === 'signup' && form.password !== form.confirmPassword) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+
     setLoading(true);
-    setMessage('');
 
     try {
       if (mode === 'login') {
@@ -59,12 +104,16 @@ export default function Login() {
         return;
       }
 
-      const res = await signupWithEmail(form);
+      const res = await signupWithEmail({
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        role: form.role
+      });
       const payload = res.data.data;
 
       if (payload?.requiresApproval) {
-        setMessageTone('success');
-        setMessage('Instructor signup request sent to admin. You can log in after approval.');
+        showToast('Instructor signup request sent to admin. You can log in after approval.', 'success');
         setMode('login');
         setForm(INITIAL_FORM);
         return;
@@ -76,16 +125,30 @@ export default function Login() {
         return;
       }
 
-      setMessageTone('success');
-      setMessage('Account created successfully. Please log in.');
+      showToast('Account created successfully. Please log in.', 'success');
       setMode('login');
       setForm(INITIAL_FORM);
     } catch (err) {
-      setMessageTone('error');
-      setMessage(getAuthErrorMessage(err));
+      showToast(getAuthErrorMessage(err), 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGithubLogin = () => {
+    setGithubLoading(true);
+    try {
+      loginWithGithub();
+    } catch {
+      setGithubLoading(false);
+      showToast('Unable to start GitHub login', 'error');
+    }
+  };
+
+  const copyDemoPassword = (password) => {
+    navigator.clipboard.writeText(password).then(() => {
+      showToast('Password copied', 'info');
+    });
   };
 
   return (
@@ -121,12 +184,6 @@ export default function Login() {
             </button>
           </div>
 
-          {message && (
-            <div className={`toast ${messageTone === 'error' ? 'toast-error' : 'toast-success'}`}>
-              {message}
-            </div>
-          )}
-
           <form onSubmit={handleLocalSubmit} className="login-form">
             {mode === 'signup' && (
               <div className="form-group">
@@ -135,6 +192,8 @@ export default function Login() {
                   type="text"
                   className="form-input"
                   value={form.name}
+                  placeholder="Your full name"
+                  autoComplete="name"
                   onChange={(event) => updateField('name', event.target.value)}
                   required
                 />
@@ -146,20 +205,68 @@ export default function Login() {
                 type="email"
                 className="form-input"
                 value={form.email}
+                placeholder="you@example.com"
+                autoComplete="email"
                 onChange={(event) => updateField('email', event.target.value)}
                 required
               />
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={form.password}
-                onChange={(event) => updateField('password', event.target.value)}
-                required
-              />
+              <div className="input-password-wrapper">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  value={form.password}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  onChange={(event) => updateField('password', event.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="input-password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <EyeIcon visible={showPassword} />
+                </button>
+              </div>
+              <span className="form-hint">Minimum 6 characters</span>
+              {mode === 'signup' && (
+                <div className="password-strength">
+                  <div className="password-strength-bars">
+                    {[1, 2, 3, 4].map((step) => {
+                      const filledClass = passwordStrength.level >= step ? `filled-${passwordStrength.level}` : '';
+                      return <span key={step} className={`password-strength-bar ${filledClass}`}></span>;
+                    })}
+                  </div>
+                  <span className="password-strength-label">{passwordStrength.label}</span>
+                </div>
+              )}
             </div>
+            {mode === 'signup' && (
+              <div className="form-group">
+                <label className="form-label">Confirm Password</label>
+                <div className="input-password-wrapper">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className="form-input"
+                    value={form.confirmPassword}
+                    autoComplete="new-password"
+                    onChange={(event) => updateField('confirmPassword', event.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="input-password-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    <EyeIcon visible={showPassword} />
+                  </button>
+                </div>
+              </div>
+            )}
             {mode === 'signup' && (
               <div className="form-group">
                 <label className="form-label">Register As</label>
@@ -171,6 +278,7 @@ export default function Login() {
                   <option value="learner">Learner</option>
                   <option value="instructor">Instructor Request</option>
                 </select>
+                <span className="form-hint">Instructor accounts require admin approval before login is enabled.</span>
               </div>
             )}
             <button type="submit" className="btn btn-primary login-submit-btn" disabled={loading}>
@@ -180,23 +288,12 @@ export default function Login() {
 
           <div className="login-divider"></div>
 
-          <button className="btn-github" onClick={loginWithGithub}>
+          <button className="btn-github" onClick={handleGithubLogin} disabled={githubLoading}>
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
               <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
             </svg>
-            Continue with GitHub
+            {githubLoading ? 'Redirecting…' : 'Continue with GitHub'}
           </button>
-
-          {/* <div className="login-trust-grid">
-            <div className="login-trust-card">
-              <strong>Structured catalog</strong>
-              <span>Browse category-based programs with approvals, embedded resources, quizzes, and certificates.</span>
-            </div>
-            <div className="login-trust-card">
-              <strong>Approval-aware access</strong>
-              <span>Instructor registrations and content changes now move through admin approval before going live.</span>
-            </div>
-          </div> */}
 
           {demoUsers.length > 0 && (
             <div className="demo-login-grid">
@@ -204,7 +301,16 @@ export default function Login() {
                 <div key={demo.role} className="demo-login-card">
                   <strong>{demo.role}</strong>
                   <span>{demo.email}</span>
-                  <code>{demo.password}</code>
+                  <div>
+                    <code>{demo.password}</code>
+                    <button
+                      type="button"
+                      className="demo-copy-btn"
+                      onClick={() => copyDemoPassword(demo.password)}
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

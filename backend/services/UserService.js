@@ -1,4 +1,5 @@
 const UserRepository = require('../repositories/UserRepository');
+const LocalCredential = require('../models/mongo/LocalCredential');
 
 class UserService {
   static getAll() { return UserRepository.findAll(); }
@@ -9,6 +10,7 @@ class UserService {
   static async remove(id) {
     const user = await UserRepository.findById(id);
     if (!user) { const err = new Error('User not found'); err.status = 404; throw err; }
+    await LocalCredential.deleteOne({ user_id: Number(id) });
     return UserRepository.delete(id);
   }
 }

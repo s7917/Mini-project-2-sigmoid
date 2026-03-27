@@ -21,11 +21,12 @@ exports.create = async (req, res, next) => {
 
 exports.getAll = async (req, res, next) => {
   try {
+    if (req.user.role === 'instructor') {
+      return sendError(res, 403, 'Instructors cannot view learner progress');
+    }
     const data = req.user.role === 'admin'
       ? await ProgressService.getAll()
-      : req.user.role === 'learner'
-        ? await ProgressService.getByUserId(req.user.sub)
-        : [];
+      : await ProgressService.getByUserId(req.user.sub);
     sendSuccess(res, 200, data);
   } catch (err) { next(err); }
 };

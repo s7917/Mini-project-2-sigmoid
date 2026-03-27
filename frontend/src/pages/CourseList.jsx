@@ -1,5 +1,7 @@
 import { useDeferredValue, useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
+import { usePageTitle } from '../hooks/usePageTitle';
 import { useCourses } from '../hooks/useCourses';
 import { createEnrollment, getAllEnrollments } from '../services/enrollmentService';
 import CourseCard from '../components/CourseCard';
@@ -12,9 +14,11 @@ const COURSES_PER_PAGE = 9;
 
 export default function CourseList() {
   const { user } = useAuth();
+  const { showToast } = useToast();
+  usePageTitle('Courses');
+
   const { courses, loading, error } = useCourses();
   const [enrolledIds, setEnrolledIds] = useState([]);
-  const [msg, setMsg] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [viewFilter, setViewFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
@@ -37,11 +41,10 @@ export default function CourseList() {
     try {
       await createEnrollment({ user_id: user.id, course_id: courseId });
       setEnrolledIds(prev => [...prev, courseId]);
-      setMsg('Enrolled successfully!');
-      setTimeout(() => setMsg(''), 3000);
+      showToast('Enrolled successfully!', 'success');
     } catch (err) {
-      setMsg(err.response?.data?.message || 'Enrollment failed');
-      setTimeout(() => setMsg(''), 3000);
+      showToast(err.response?.data?.message || 'Enrollment failed', 'error');
+      throw err;
     }
   };
 
@@ -119,13 +122,18 @@ export default function CourseList() {
       <section className="catalog-toolbar">
         <label className="catalog-search">
           <span className="catalog-search-label">Search</span>
-          <input
-            className="form-input"
-            type="search"
-            placeholder="Search by title, description, or instructor"
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.target.value)}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              className="form-input"
+              type="search"
+              placeholder="Search by title, description, or instructor"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+            />
+            {searchValue.length > 0 && (
+              <button type="button" className="search-clear-btn" onClick={() => setSearchValue('')}>×</button>
+            )}
+          </div>
         </label>
         {user?.role === 'learner' && (
           <div className="catalog-filters">
@@ -159,14 +167,13 @@ export default function CourseList() {
         ))}
       </section>
 
-      {msg && <div className={`toast ${msg.includes('fail') ? 'toast-error' : 'toast-success'}`}>{msg}</div>}
       <ErrorMessage message={error} />
       <div className="course-grid">
         {paginatedCourses.map(course => (
           <CourseCard
             key={course.id}
             course={course}
-            onEnroll={handleEnroll}
+            onEnroll={(courseId) => handleEnroll(courseId)}
             enrolled={enrolledIds.includes(course.id)}
             showEnroll={user?.role === 'learner'}
           />

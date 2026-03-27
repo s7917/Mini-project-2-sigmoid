@@ -9,7 +9,15 @@ class ProgressService {
   static getById(id) { return ProgressRepository.findById(id); }
   static getByUserId(userId) { return ProgressRepository.findByUserId(userId); }
 
-  static create(data) { return ProgressRepository.create(data); }
+  static async create(data) {
+    const enrollment = await EnrollmentRepository.findByUserAndCourse(data.user_id, data.course_id);
+    if (!enrollment) {
+      const err = new Error('User must be enrolled in the course before progress can be tracked.');
+      err.status = 400;
+      throw err;
+    }
+    return ProgressRepository.create(data);
+  }
   static update(id, data) { return ProgressRepository.update(id, data); }
   static patch(id, data) { return ProgressRepository.patch(id, data); }
 
@@ -43,6 +51,13 @@ class ProgressService {
   }
 
   static async completeLesson(userId, courseId, lessonId) {
+    const enrollment = await EnrollmentRepository.findByUserAndCourse(userId, courseId);
+    if (!enrollment) {
+      const err = new Error('You must be enrolled in this course to complete lessons.');
+      err.status = 403;
+      throw err;
+    }
+
     const lesson = await LessonRepository.findById(lessonId);
     if (!lesson) {
       const err = new Error('Lesson not found');
@@ -59,7 +74,7 @@ class ProgressService {
 
     if (!latestStart) {
       const err = new Error('Please spend more time in the lesson before marking it complete');
-      err.status = 429;
+      err.status = 422;
       throw err;
     }
 
@@ -68,7 +83,7 @@ class ProgressService {
 
     if (elapsedSeconds < minimumReadSeconds) {
       const err = new Error('Please spend more time in the lesson before marking it complete');
-      err.status = 429;
+      err.status = 422;
       throw err;
     }
 
@@ -104,7 +119,6 @@ class ProgressService {
       });
     }
 
-    const enrollment = await EnrollmentRepository.findByUserAndCourse(userId, courseId);
     if (enrollment) {
       await EnrollmentRepository.patch(enrollment.id, {
         status: completionPercentage >= 100 ? 'completed' : 'active'
@@ -120,7 +134,7 @@ class ProgressService {
   static calculateMinimumReadSeconds(content) {
     const words = String(content || '').trim().split(/\s+/).filter(Boolean).length;
     const derivedSeconds = Math.ceil(words / 3.2);
-    return Math.max(8, Math.min(90, derivedSeconds));
+    return Math.max(1, Math.min(1, derivedSeconds));
   }
 }
 
